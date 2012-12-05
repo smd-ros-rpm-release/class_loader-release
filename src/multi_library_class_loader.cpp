@@ -46,7 +46,10 @@ std::vector<std::string> MultiLibraryClassLoader::getRegisteredLibraries()
 {
   std::vector<std::string> libraries;
   for(LibraryToClassLoaderMap::iterator itr = active_class_loaders_.begin(); itr != active_class_loaders_.end(); itr++)
-    libraries.push_back(itr->first);
+  {
+    if(itr->second != NULL)
+      libraries.push_back(itr->first);
+  }
   return(libraries);
 }
 

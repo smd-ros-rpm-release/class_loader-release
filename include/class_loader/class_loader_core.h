@@ -61,6 +61,7 @@ typedef std::map<ClassName, class_loader_private::AbstractMetaObjectBase*> Facto
 typedef std::map<BaseClassName, FactoryMap> BaseToFactoryMapMap;
 typedef std::pair<LibraryPath, Poco::SharedLibrary*> LibraryPair;
 typedef std::vector<LibraryPair> LibraryVector;
+typedef std::vector<AbstractMetaObjectBase*> MetaObjectVector;
 
 //Debug 
 /*****************************************************************************/
@@ -111,16 +112,18 @@ void setCurrentlyActiveClassLoader(ClassLoader* loader);
  * @brief This function extracts a reference to the FactoryMap for appropriate base class out of the global plugin base to factory map. This function should be used by functions in this namespace that need to access the various factories so as to make sure the right key is generated to index into the global map.
  * @return A reference to the FactoryMap contained within the global Base-to-FactoryMap map.
  */
+FactoryMap& getFactoryMapForBaseClass(const std::string& typeid_base_class_name);
+
+/**
+ * @brief Same as above but uses a type parameter instead of string for more safety if info is available.
+ * @return A reference to the FactoryMap contained within the global Base-to-FactoryMap map.
+ */
 template <typename Base>
 FactoryMap& getFactoryMapForBaseClass()
 {
-  BaseToFactoryMapMap& factoryMapMap = getGlobalPluginBaseToFactoryMapMap();
-  std::string base_class_name = typeid(Base).name();
-  if(factoryMapMap.find(base_class_name) == factoryMapMap.end())
-    factoryMapMap[base_class_name] = FactoryMap();
-
-  return(factoryMapMap[base_class_name]);
+    return(getFactoryMapForBaseClass(typeid(Base).name()));
 }
+
 
 /**
  * @brief To provide thread safety, all exposed plugin functions can only be run serially by multiple threads. This is implemented by using critical sections enforced by a single mutex which is locked and released with the following two functions
@@ -151,13 +154,13 @@ void hasANonPurePluginLibraryBeenOpened(bool hasIt);
  * @param class_name - the literal name of the class being registered (NOT MANGLED)
  */
 template <typename Derived, typename Base> 
-void registerPlugin(const std::string& class_name)
+void registerPlugin(const std::string& class_name, const std::string& base_class_name)
 {
   //Note: This function will be automatically invoked when a dlopen() call
   //opens a library. Normally it will happen within the scope of loadLibrary(),
   //but that may not be guaranteed.
 
-  logDebug("class_loader::class_loader_core: Registering plugin factory for class = %s, ClassLoader* = %p and library name %s.\n", class_name.c_str(), getCurrentlyActiveClassLoader(), getCurrentlyLoadingLibraryName().c_str());
+  logDebug("class_loader::class_loader_core: Registering plugin factory for class = %s, ClassLoader* = %p and library name %s.", class_name.c_str(), getCurrentlyActiveClassLoader(), getCurrentlyLoadingLibraryName().c_str());
 
   if(getCurrentlyActiveClassLoader() == NULL)
   {
@@ -166,7 +169,7 @@ void registerPlugin(const std::string& class_name)
   }
 
   //Create factory
-  class_loader_private::AbstractMetaObject<Base>* new_factory = new class_loader_private::MetaObject<Derived, Base>(class_name.c_str());
+  class_loader_private::AbstractMetaObject<Base>* new_factory = new class_loader_private::MetaObject<Derived, Base>(class_name, base_class_name);
   new_factory->addOwningClassLoader(getCurrentlyActiveClassLoader());
   new_factory->setAssociatedLibraryPath(getCurrentlyLoadingLibraryName());
 
@@ -179,7 +182,7 @@ void registerPlugin(const std::string& class_name)
   factoryMap[class_name] = new_factory;
   getPluginBaseToFactoryMapMapMutex().unlock();
 
-  logDebug("class_loader::class_loader_core: Registration of %s complete.\n", class_name.c_str());
+  logDebug("class_loader::class_loader_core: Registration of %s complete.", class_name.c_str());
 }
 
 /**
@@ -218,6 +221,8 @@ Base* createInstance(const std::string& derived_class_name, ClassLoader* loader)
     else
       throw(class_loader::CreateClassException("Could not create instance of type " + derived_class_name));
   }
+
+  logDebug("class_loader::class_loader_core: Created instance of type %s and object pointer = %p", (typeid(obj).name()), obj);
 
   return(obj);
 }
