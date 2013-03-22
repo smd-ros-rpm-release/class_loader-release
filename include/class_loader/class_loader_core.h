@@ -27,18 +27,19 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CLASS_LOADER_CORE_H_DEFINED
-#define CLASS_LOADER_CORE_H_DEFINED
+#ifndef class_loader_private_H_DEFINED
+#define class_loader_private_H_DEFINED
 
 #include <Poco/SharedLibrary.h>
-#include <boost/thread/mutex.hpp>
-#include <vector>
+#include <boost/thread/recursive_mutex.hpp>
+//#include <vector>
 #include <map>
 #include <typeinfo>
 #include <string>
 #include "class_loader/meta_object.h"
 #include "class_loader/class_loader_exceptions.h"
-
+#include <cstdio>
+ 
 /**
  * @note This header file is the internal implementation of the plugin system which is exposed via the ClassLoader class
  */
@@ -60,6 +61,11 @@ typedef std::map<ClassName, class_loader_private::AbstractMetaObjectBase*> Facto
 typedef std::map<BaseClassName, FactoryMap> BaseToFactoryMapMap;
 typedef std::pair<LibraryPath, Poco::SharedLibrary*> LibraryPair;
 typedef std::vector<LibraryPair> LibraryVector;
+typedef std::vector<AbstractMetaObjectBase*> MetaObjectVector;
+
+//Debug 
+/*****************************************************************************/
+void printDebugInfoToScreen();
 
 //Global storage
 /*****************************************************************************/
@@ -106,22 +112,36 @@ void setCurrentlyActiveClassLoader(ClassLoader* loader);
  * @brief This function extracts a reference to the FactoryMap for appropriate base class out of the global plugin base to factory map. This function should be used by functions in this namespace that need to access the various factories so as to make sure the right key is generated to index into the global map.
  * @return A reference to the FactoryMap contained within the global Base-to-FactoryMap map.
  */
+FactoryMap& getFactoryMapForBaseClass(const std::string& typeid_base_class_name);
+
+/**
+ * @brief Same as above but uses a type parameter instead of string for more safety if info is available.
+ * @return A reference to the FactoryMap contained within the global Base-to-FactoryMap map.
+ */
 template <typename Base>
 FactoryMap& getFactoryMapForBaseClass()
 {
-  BaseToFactoryMapMap& factoryMapMap = getGlobalPluginBaseToFactoryMapMap();
-  std::string base_class_name = typeid(Base).name();
-  if(factoryMapMap.find(base_class_name) == factoryMapMap.end())
-    factoryMapMap[base_class_name] = FactoryMap();
-
-  return(factoryMapMap[base_class_name]);
+    return(getFactoryMapForBaseClass(typeid(Base).name()));
 }
 
 /**
  * @brief To provide thread safety, all exposed plugin functions can only be run serially by multiple threads. This is implemented by using critical sections enforced by a single mutex which is locked and released with the following two functions
  * @return A reference to the global mutex
  */
-boost::mutex& getCriticalSectionMutex();
+boost::recursive_mutex& getLoadedLibraryVectorMutex();
+boost::recursive_mutex& getPluginBaseToFactoryMapMapMutex();
+
+/**
+ * @brief Indicates if a library containing more than just plugins has been opened by the running process
+ * @return True if a non-pure plugin library has been opened, otherwise false
+ */
+bool hasANonPurePluginLibraryBeenOpened();
+
+/**
+ * @brief Sets a flag indicating if a library containing more than just plugins has been opened by the running process
+ * @param hasIt - The flag
+ */
+void hasANonPurePluginLibraryBeenOpened(bool hasIt);
 
 //Plugin Functions
 /*****************************************************************************/
@@ -134,21 +154,34 @@ boost::mutex& getCriticalSectionMutex();
  * @param class_name - the literal name of the class being registered (NOT MANGLED)
  */
 template <typename Derived, typename Base> 
-void registerPlugin(const std::string& class_name)
+void registerPlugin(const std::string& class_name, const std::string& base_class_name)
 {
-  //Note: Critical section not necessary as registerPlugin is called within scope of loadLibrary which is protected
-  logDebug("class_loader::class_loader_core: Registering plugin class %s.\n", class_name.c_str());
+  //Note: This function will be automatically invoked when a dlopen() call
+  //opens a library. Normally it will happen within the scope of loadLibrary(),
+  //but that may not be guaranteed.
+  logDebug("class_loader::class_loader_private: Registering plugin factory for class = %s, ClassLoader* = %p and library name %s.", class_name.c_str(), getCurrentlyActiveClassLoader(), getCurrentlyLoadingLibraryName().c_str());
 
-  class_loader_private::AbstractMetaObject<Base>* new_factory = new class_loader_private::MetaObject<Derived, Base>(class_name.c_str());
+  if(getCurrentlyActiveClassLoader() == NULL)
+  {
+    logDebug("class_loader::class_loader_private: ALERT!!! A library containing plugins has been opened through a means other than through the class_loader or pluginlib package. This can happen if you build plugin libraries that contain more than just plugins (i.e. normal code your app links against). This inherently will trigger a dlopen() prior to main() and cause problems as class_loader is not aware of plugin factories that autoregister under the hood. The class_loader package can compensate, but you may run into namespace collision problems (e.g. if you have the same plugin class in two different libraries and you load them both at the same time). The biggest problem is that library can now no longer be safely unloaded as the ClassLoader does not know when non-plugin code is still in use. In fact, no ClassLoader instance in your application will be unable to unload any library once a non-pure one has been opened. Please refactor your code to isolate plugins into their own libraries.");
+    hasANonPurePluginLibraryBeenOpened(true);    
+  }
 
-  logDebug("class_loader::class_loader_core: Registering with class loader = %p and library name %s.\n", getCurrentlyActiveClassLoader(), getCurrentlyLoadingLibraryName().c_str());
+  //Create factory
+  class_loader_private::AbstractMetaObject<Base>* new_factory = new class_loader_private::MetaObject<Derived, Base>(class_name, base_class_name);
   new_factory->addOwningClassLoader(getCurrentlyActiveClassLoader());
   new_factory->setAssociatedLibraryPath(getCurrentlyLoadingLibraryName());
 
-  FactoryMap& factoryMap = getFactoryMapForBaseClass<Base>();
-  factoryMap[class_name] = new_factory;
 
-  logDebug("class_loader::class_loader_core: Registration of %s complete.\n", class_name.c_str());
+  //Add it to global factory map map
+  getPluginBaseToFactoryMapMapMutex().lock();
+  FactoryMap& factoryMap = getFactoryMapForBaseClass<Base>();
+  if(factoryMap.find(class_name) != factoryMap.end())
+    logWarn("class_loader::class_loader_private: SEVERE WARNING!!! A namespace collision has occured with plugin factory for class %s. New factory will OVERWRITE existing one. This situation occurs when libraries containing plugins are directly linked against an executable (the one running right now generating this message). Please separate plugins out into their own library or just don't link against the library and use either class_loader::ClassLoader/MultiLibraryClassLoader to open.");
+  factoryMap[class_name] = new_factory;
+  getPluginBaseToFactoryMapMapMutex().unlock();
+
+  logDebug("class_loader::class_loader_private: Registration of %s complete (Metaobject Address = %p)", class_name.c_str(), new_factory);
 }
 
 /**
@@ -160,19 +193,35 @@ void registerPlugin(const std::string& class_name)
 template <typename Base> 
 Base* createInstance(const std::string& derived_class_name, ClassLoader* loader)
 {
-  boost::mutex::scoped_lock lock(getCriticalSectionMutex());
-
-  Base* obj = NULL;
+  AbstractMetaObject<Base>* factory = NULL;
+  
+  getPluginBaseToFactoryMapMapMutex().lock();
   FactoryMap& factoryMap = getFactoryMapForBaseClass<Base>();
   if(factoryMap.find(derived_class_name) != factoryMap.end())
+    factory = dynamic_cast<class_loader_private::AbstractMetaObject<Base>*>(factoryMap[derived_class_name]);
+  else
   {
-    AbstractMetaObject<Base>* factory = dynamic_cast<class_loader_private::AbstractMetaObject<Base>*>(factoryMap[derived_class_name]);
-    if(factory->isOwnedBy(loader))
-      obj = factory->create();
+    logError("class_loader::class_loader_private: No metaobject exists for class type %s.", derived_class_name.c_str());
   }
+  getPluginBaseToFactoryMapMapMutex().unlock();
+
+  Base* obj = NULL;
+  if(factory != NULL && factory->isOwnedBy(loader))
+    obj = factory->create();
 
   if(obj == NULL) //Was never created
-    throw(class_loader::CreateClassException("Could not create instance of type " + derived_class_name));
+  {
+    if(factory && factory->isOwnedBy(NULL))
+    {
+      logDebug("class_loader::class_loader_private: ALERT!!! A metaobject (i.e. factory) exists for desired class, but has no owner. This implies that the library containing the class was dlopen()ed by means other than through the class_loader interface. This can happen if you build plugin libraries that contain more than just plugins (i.e. normal code your app links against) -- that intrinsically will trigger a dlopen() prior to main(). You should isolate your plugins into their own library, otherwise it will not be possible to shutdown the library!");
+
+      obj = factory->create();
+    }
+    else
+      throw(class_loader::CreateClassException("Could not create instance of type " + derived_class_name));
+  }
+
+  logDebug("class_loader::class_loader_private: Created instance of type %s and object pointer = %p", (typeid(obj).name()), obj);
 
   return(obj);
 }
@@ -185,18 +234,24 @@ Base* createInstance(const std::string& derived_class_name, ClassLoader* loader)
 template <typename Base> 
 std::vector<std::string> getAvailableClasses(ClassLoader* loader)
 {
-  boost::mutex::scoped_lock lock(getCriticalSectionMutex());
+  boost::recursive_mutex::scoped_lock lock(getPluginBaseToFactoryMapMapMutex());
 
   FactoryMap& factory_map = getFactoryMapForBaseClass<Base>();
   std::vector<std::string> classes;
+  std::vector<std::string> classes_with_no_owner;
 
   for(FactoryMap::const_iterator itr = factory_map.begin(); itr != factory_map.end(); ++itr)
   {
     AbstractMetaObjectBase* factory = itr->second;
     if(factory->isOwnedBy(loader))
       classes.push_back(itr->first);
+    else if(factory->isOwnedBy(NULL))
+      classes_with_no_owner.push_back(itr->first);
   }
 
+  //Added classes not associated with a class loader (Which can happen through
+  //an unexpected dlopen() to the library)
+  classes.insert(classes.end(), classes_with_no_owner.begin(),  classes_with_no_owner.end());
   return(classes);
 }
 

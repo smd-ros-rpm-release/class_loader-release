@@ -34,6 +34,7 @@
 
 #include <console_bridge/console.h>
 #include <vector>
+#include <typeinfo>
 
 namespace class_loader
 {
@@ -43,41 +44,52 @@ class ClassLoader; //Forward declaration
 namespace class_loader_private 
 {
 
+typedef std::vector<class_loader::ClassLoader*> ClassLoaderVector;
+
 /**
  * @class AbstractMetaObjectBase
  * @brief A base class for MetaObjects that excludes a polymorphic type parameter. Subclasses are class templates though.
  */
 class AbstractMetaObjectBase
-{
-  typedef std::vector<class_loader::ClassLoader*> ClassLoaderVector;
-
+{  
   public:
 
     /**
      * @brief Constructor for the class
      */
-    AbstractMetaObjectBase() :  
-    associated_library_path_("Unknown")
-    {
-    }
+    AbstractMetaObjectBase(const std::string& class_name, const std::string& base_class_name);
+    /**
+     * @brief Destructor for the class. THIS MUST NOT BE VIRTUAL AND OVERRIDDEN BY
+     * TEMPLATE SUBCLASSES, OTHERWISE THEY WILL PULL IN A REDUNDANT METAOBJECT
+     * DESTRUCTOR OUTSIDE OF libclass_loader WITHIN THE PLUGIN LIBRARY! T
+     */
+    ~AbstractMetaObjectBase();
 
     /**
-     * @brief Destructor for the class
+     * @brief Gets the literal name of the class.
+     * @return The literal name of the class as a C-string.
      */
-    virtual ~AbstractMetaObjectBase()
-    {
-    } 
+    std::string className() const;
+
+    /**
+     * @brief gets the base class for the class this factory represents
+     */
+    std::string baseClassName() const;
+    /**
+     * @brief Gets the name of the class as typeid(BASE_CLASS).name() would return it
+     */
+    std::string typeidBaseClassName() const;
 
     /**
      * @brief Gets the path to the library associated with this factory
      * @return Library path as a std::string
      */
-    std::string getAssociatedLibraryPath(){return(associated_library_path_);}
+    std::string getAssociatedLibraryPath();
 
     /**
      * @brief Sets the path to the library associated with this factory
      */
-    void setAssociatedLibraryPath(std::string library_path){associated_library_path_ = library_path;}
+    void setAssociatedLibraryPath(std::string library_path);
 
     /**
      * @brief Associates a ClassLoader owner with this factory,
@@ -102,9 +114,23 @@ class AbstractMetaObjectBase
      */
     bool isOwnedByAnybody();
 
-  private:
+    /**
+     * A vector of class loaders that own this metaobject
+     */
+    ClassLoaderVector getAssociatedClassLoaders();
+
+  protected:
+    /**
+     * This is needed to make base class polymorphic (i.e. have a vtable)
+     */
+    virtual void dummyMethod(){}
+
+  protected:
     ClassLoaderVector associated_class_loaders_;    
     std::string associated_library_path_;
+    std::string base_class_name_;
+    std::string class_name_;
+    std::string typeid_base_class_name_;
 };
 
 /**
@@ -120,22 +146,11 @@ class AbstractMetaObject : public AbstractMetaObjectBase
      * @brief A constructor for this class
      * @param name The literal name of the class.
      */
-    AbstractMetaObject(const char* name) : name_(name)
+    AbstractMetaObject(const std::string& class_name, const std::string& base_class_name) : 
+    AbstractMetaObjectBase(class_name, base_class_name)
     {
+        AbstractMetaObjectBase::typeid_base_class_name_ = std::string(typeid(B).name());
     }
-
-    /**
-     * @brief Desonstructor for this class
-     */
-    virtual ~AbstractMetaObject()
-    {
-    }
-
-    /**
-     * @brief Gets the literal name of the class.
-     * @return The literal name of the class as a C-string.
-     */
-    const char* name() const{return name_;}
 
     /**
      * @brief Defines the factory interface that the MetaObject must implement.
@@ -149,8 +164,6 @@ class AbstractMetaObject : public AbstractMetaObjectBase
     AbstractMetaObject();
     AbstractMetaObject(const AbstractMetaObject&);
     AbstractMetaObject& operator = (const AbstractMetaObject&);
-
-    const char* name_;
 };
 
 /**
@@ -166,16 +179,9 @@ class MetaObject: public AbstractMetaObject<B>
     /**
      * @brief Constructor for the class
      */
-    MetaObject(const char* name): AbstractMetaObject<B>(name)
+    MetaObject(const std::string& class_name, const std::string& base_class_name) :
+    AbstractMetaObject<B>(class_name, base_class_name)
     {
-    }
-
-    /**
-     * @brief Destructor for the class
-     */
-    virtual ~MetaObject()
-    {
-      logDebug("class_loader::MetaObject: Destructor for factory for class type = %s.\n",(this->name()));
     }
 
     /**
