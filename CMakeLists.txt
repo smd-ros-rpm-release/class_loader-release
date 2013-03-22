@@ -11,7 +11,8 @@ find_package(console_bridge REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  DEPENDS Boost Poco console_bridge
+  CATKIN_DEPENDS console_bridge
+  DEPENDS Boost Poco
   CFG_EXTRAS class_loader-extras.cmake
 )
 
