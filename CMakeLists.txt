@@ -11,7 +11,8 @@ find_package(console_bridge REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  DEPENDS Boost Poco console_bridge
+  CATKIN_DEPENDS console_bridge
+  DEPENDS Boost Poco
   CFG_EXTRAS class_loader-extras.cmake
 )
 
@@ -28,8 +29,11 @@ target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} ${console_bridge_LIBRAR
 
 install(TARGETS ${PROJECT_NAME}
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION})
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})
 install(DIRECTORY include/class_loader/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
 
-add_subdirectory(test)
+if(CATKIN_ENABLE_TESTING)
+  add_subdirectory(test)
+endif()
