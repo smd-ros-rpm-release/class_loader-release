@@ -2,26 +2,24 @@
 Changelog for package class_loader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.2.3 (2013-08-21)
-------------------
+0.1.31 (2013-08-21)
+-------------------
 * fix missing class name in logWarn output
 
-0.2.2 (2013-07-14)
-------------------
+0.1.30 (2013-07-14)
+-------------------
 * check for CATKIN_ENABLE_TESTING (`#10 <https://github.com/ros/class_loader/issues/10>`_)
 * fix find Poco to return full lib path (`#8 <https://github.com/ros/class_loader/issues/8>`_)
 * add missing runtime destination for library under Windows
-* add Boosst component system
 
-0.2.1 (2013-06-06)
-------------------
+0.1.29 (2013-06-06)
+-------------------
 * improve check for Poco foundation and headers (`#7 <https://github.com/ros/class_loader/issues/7>`_)
 
-0.2.0 (2013-03-13)
-------------------
+0.1.28 (2013-03-21)
+-------------------
 * use find_package for Poco/dl instead to make it work on other platforms
 * update Poco cmake file to include libdl on non-windows systems
-* No longer CATKIN_DEPEND on console_bridge
 
 0.1.27 (2013-01-25)
 -------------------
