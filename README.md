@@ -1,3 +1,22 @@
+## class_loader - 0.2.4-0
+
+User `dthomas@drudge` released the packages in the `class_loader` repository by running `/usr/bin/bloom-release -r indigo -t indigo class_loader` on `Wed, 12 Feb 2014 23:25:57 -0000`
+
+The `class_loader` package was released.
+
+Version of package(s) in repository `class_loader`:
+- rosdistro version: `null`
+- old version: `None-0`
+- new version: `0.2.4-0`
+
+Versions of tools used:
+- bloom version: `0.4.9`
+- catkin_pkg version: `0.1.26`
+- rosdep version: `0.10.25`
+- rosdistro version: `0.3.4`
+- vcstools version: `0.1.33`
+
+
 ## class_loader - 0.1.31-0
 
 User `dthomas@drudge` released the packages in the `class_loader` repository by running `/usr/bin/bloom-release -t groovy -r groovy class_loader` on `Thu, 05 Sep 2013 22:23:05 -0000`
