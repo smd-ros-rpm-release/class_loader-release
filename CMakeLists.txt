@@ -4,15 +4,14 @@ project(class_loader)
 set(Poco_DIR cmake)
 
 find_package(Poco REQUIRED COMPONENTS Foundation)
-find_package(Boost REQUIRED COMPONENTS thread)
+find_package(Boost REQUIRED COMPONENTS thread system)
 find_package(catkin REQUIRED)
 find_package(console_bridge REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS console_bridge
-  DEPENDS Boost Poco
+  DEPENDS Boost Poco console_bridge
   CFG_EXTRAS class_loader-extras.cmake
 )
 
