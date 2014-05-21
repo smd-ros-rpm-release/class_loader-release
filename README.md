@@ -1,3 +1,22 @@
+## class_loader (indigo) - 0.2.5-0
+
+The packages in the `class_loader` repository were released into the `indigo` distro by running `/usr/bin/bloom-release class_loader -t indigo -r indigo` on `Wed, 21 May 2014 16:39:39 -0000`
+
+The `class_loader` package was released.
+
+Version of package(s) in repository `class_loader`:
+- rosdistro version: `0.2.4-0`
+- old version: `0.2.4-0`
+- new version: `0.2.5-0`
+
+Versions of tools used:
+- bloom version: `0.5.8`
+- catkin_pkg version: `0.2.2`
+- rosdep version: `0.10.27`
+- rosdistro version: `0.3.5`
+- vcstools version: `0.1.35`
+
+
 ## class_loader (hydro) - 0.2.5-0
 
 User `vagrant@precise64` released the packages in the `class_loader` repository into the `hydro` distro by running `/usr/bin/bloom-release class_loader --track hydro --rosdistro hydro` on `Tue, 04 Mar 2014 18:22:48 -0000`
