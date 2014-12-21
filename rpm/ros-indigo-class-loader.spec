@@ -8,8 +8,10 @@ License:        BSD
 URL:            http://ros.org/wiki/class_loader
 Source0:        %{name}-%{version}.tar.gz
 
+Requires:       boost-devel
 Requires:       console-bridge-devel
 Requires:       poco-devel
+BuildRequires:  boost-devel
 BuildRequires:  console-bridge-devel
 BuildRequires:  poco-devel
 BuildRequires:  ros-indigo-catkin >= 0.5.68
